@@ -145,18 +145,27 @@ class Net(nn.Module):
         #s.reverse()
         
         if self.SDTP:
-            #compute first target for simplified DTP
+            #compute target for output layer
             t.append(F.one_hot(y, num_classes=10).float())
+
+            #compute targets for lower layers       
+            for i in range(len(s) - 2):
+                t.append(s[i + 1] - torch.tanh(self.wb[i](s[i])) + torch.tanh(self.wb[i](t[i])))
         else:
-            #compute first target for standard DTP
+            #no target for output layer
+            t.append(None)
+            
+            #compute target for penultimate layer
             loss = criterion(s[0].float(), y)
             init_grad = torch.tensor([1 for i in range(data.size(0))], dtype=torch.float, device=device, requires_grad=True)
-            grad = torch.autograd.grad(loss, s[0], grad_outputs=init_grad)
-            t.append(s[0] - self.lr_target*grad[0])
+            grad = torch.autograd.grad(loss, s[1], grad_outputs=init_grad, retain_graph = True)
+            t.append(s[1] - self.lr_target*grad[0])
 
-        #compute targets for lower layers       
-        for i in range(len(s) - 2):
-            t.append(s[i + 1] - torch.tanh(self.wb[i](s[i])) + torch.tanh(self.wb[i](t[i])))
+            #compute targets for lower layers       
+            for i in range(len(s) - 3):
+                t.append(s[i + 1] - torch.tanh(self.wb[i](s[i])) + torch.tanh(self.wb[i](t[i])))
+
+
 
         #s.reverse()
         #t.reverse()
@@ -279,13 +288,16 @@ if __name__ == '__main__':
         '''
         
         #check target computation
-        '''
+        
         s.reverse()
-        t = net.computeTargets(s, target, criterion)                
+        t = net.computeTargets(s, target, nlll)                
         #print(t)
         for i in t:
-            print(i.size())
-        '''
+            if i is None:
+                print('No target')
+            else:
+                print(i.size())
+        
         
         #check reconstruction
         '''
